@@ -1,7 +1,8 @@
 import { FoodDataAPI } from './FoodDataAPI.js';
+import { processImage, rekognition } from './foodApp.js';
 import express from 'express';
 import bodyParser from 'body-parser';
-import multer from 'multer';
+import multer from 'multer'; 
 
 const upload = multer(); // Handles multipart/form-data
 
@@ -15,53 +16,47 @@ app.post(
   '/upload',
   upload.fields([{ name: "image" }, { name: "massData" }]),
   async (req, res) => {
-    
-    // Log the mass data received
-    const massData = req.body.massData; // This is the JSON string
-    console.log("Mass Data Received:", massData);
+    try {
+      // Handle massData if necessary
+      // const massData = req.body.massData;
 
-    // Check if mass data exists
-    if (!massData) {
-      return res.status(400).json({ error: "Mass data is required" });
+      // Use the uploaded image
+      // const imageFile = req.files.image[0];
+      // For this example, we're using a static image path
+      const pathToImg = "./fried-egg-500x500.jpg";
+      
+      const params = await processImage(pathToImg);
+      const rekognitionResponse = await rekognition(params);
+
+      if (!rekognitionResponse) {
+        return res.status(400).json({ error: 'No food items detected.' });
+      }
+
+      const fdc = new FoodDataAPI();
+      const foodID = await fdc.getFoodID(rekognitionResponse);
+
+      if (!foodID) {
+        console.log('Food ID not found.');
+        return res.status(400).json({ error: 'Food ID not found.' });
+      } else {
+        const nutrientInfo = await fdc.getNutrientInfo(foodID);
+
+        // Simulate processing and response
+        const responseData = {
+          status: "success",
+          message: "Data received successfully",
+          food: rekognitionResponse,
+          calories: nutrientInfo.calories,
+          protein: nutrientInfo.protein
+        };
+
+        // Send a JSON response
+        res.json(responseData);
+      }
+    } catch (error) {
+      console.error('An error occurred:', error);
+      res.status(500).json({ error: 'An internal server error occurred.' });
     }
-    // Log received image data (optional)
-    const image = req.files.image[0]; // The image file
-    console.log("Image size:", image.size); // Log the size of the uploaded image
-
-    /*
-      Rekognition Function calling goes here
-      Sample string return is 'chicken'
-    */
-   
-    let rekognitionResponse = 'chicken';
-
-    const fdc = new FoodDataAPI();
-    const foodID = await fdc.getFoodID(rekognitionResponse);
-    console.log(foodID);
-    if (!foodID) {
-      console.log('Food ID not found.');
-        
-    } else {
-      const nutrientInfo = await fdc.getNutrientInfo(foodID);
-
-      //TODO calculate meal nutritional content based on serving size. 
-      //getNutrientInfo returns protien and kcals per 100g serving
-
-      // Simulate processing and response
-      const responseData = {
-        status: "success",
-        message: "Data received successfully",
-        calories: nutrientInfo.calories,
-        protein: nutrientInfo.protein
-      };
-
-      // Send a JSON response
-      res.json(responseData);
-
-    }
-
-
-    
   }
 );
 
